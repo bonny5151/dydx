@@ -1,21 +1,25 @@
-var i = require("./src")
-var prefix = i.BECH32_PREFIX
-compositeclient = require("./src/clients/composite-client").CompositeClient
- constants = require("./src/clients/constants")
- Network = constants.Network
-OrderExecution = constants.OrderExecution
-OrderSide = constants.OrderSide
-LocalWallet = require("./src/clients/modules/local-wallet").default
-var subaccount = require("./src/clients/subaccount")
+var compositeclient = require("./build/src/clients/composite-client").CompositeClient
+var constants = require("./build/src/clients/constants")
+var Network = constants.Network
+var OrderExecution = constants.OrderExecution
+var OrderSide = constants.OrderSide
+var LocalWallet = require("./build/src/clients/modules/local-wallet").default
+var subaccount = require("./build/src/clients/subaccount")
 var SubaccountInfo = subaccount.SubaccountInfo
-var utils = require("./src/lib/utils")
+var utils = require("./build/src/lib/utils")
 var randomInt = utils.randomInt
-var ordersParams = require("./examples/human_readable_short_term_orders.json")
-IndexerClient = require('./src/clients/indexer-client').IndexerClient
-indexerclient = new IndexerClient(Network.mainnet().indexerConfig)
-connection = ''
-compositeclient.connect(Network.mainnet()).then(i1=>connection=i1)
-
+var ordersParams = require("./build/examples/human_readable_short_term_orders.json")
+var IndexerClient = require('./build/src/clients/indexer-client').IndexerClient
+var indexerclient = '';
+// new IndexerClient(Network.mainnet().indexerConfig)
+var connection = ''
+var connections={connection, indexerclient}
+resetconnections()
+async function resetconnections() {
+   compositeclient.connect(Network.mainnet()).then(i1=>{connection=i1; connections.connection=i1;})
+   indexerclient = new IndexerClient(Network.mainnet().indexerConfig)
+   connections.indexerclient=indexerclient
+}
 async function getwallet(mnemonic) {
  return LocalWallet.fromMnemonic(mnemonic,'dydx')
 }
@@ -31,6 +35,10 @@ function getsubaccount(wallet, account=0)
 }
 //o = require("@dydxprotocol/v4-proto/src/codegen/dydxprotocol/clob/order")
 //ordersParams = require("./examples/human_readable_orders.json")
+
+function filterorder(o) {
+
+}
 
 async function placeorder({ client, account, symbol, type, side, price, amount, id})
 {
@@ -49,6 +57,27 @@ async function placeorder({ client, account, symbol, type, side, price, amount, 
  }
 }
 
+async function getblockheight() {
+    return dydxlib.connections.connection.validatorClient.get.latestBlockHeight();
+
+}
+
+async function placeshorttermorder({account, id, symbol, side, price, amount}) {
+   
+   side = side[0].toUpperCase() == 'B'  ? "BUY" : 'SELL'
+   var bl = await getblockheight()
+  return connection.placeShortTermOrder(account, symbol, side, price, amount, id, bl + 21, 0, false)
+
+}
+
+
+
+async function cancelshorttermorder({account, id, symbol, blockheight=21}) {
+  var bl=await getblockheight()
+  
+  return connection.cancelOrder(account, id, 0, symbol,bl+blockheight ,0)
+}
+
 async function cancelorder({account, id, symbol}) {
   return connection.cancelOrder(account, id, 64, symbol,0,1000003)
 }
@@ -61,6 +90,15 @@ async function accountinfo(address) {
   return indexerclient.account.getSubaccounts(address)
 }
 
+async function orderbook(symbol) {
+  return indexerclient.markets.getPerpetualMarketOrderbook(symbol)
+}
+async function market(symbol) {
+ return  indexerclient.markets.getPerpetualMarkets(symbol)
+}
+async function trades(symbol,l='10') {
+ return indexerclient.markets.getPerpetualMarketTrades(symbol, Number.MAX_SAFE_INTEGER,l)
+}
 async function getpositions(address) {
   return indexerclient.account.getSubaccountPerpetualPositions(address,0)
 
@@ -78,4 +116,4 @@ async function filledorders(address) {
  return indexerclient.account.getSubaccountFills(address,0)
 }
 
-module.exports = {filledorders, openorders, availablefunds, getpositions, cancelorder, placeorder, getpositions, getwallet, getsubaccount, accountinfo, randomid}
+module.exports = {placeshorttermorder, cancelshorttermorder, getblockheight, filledorders, openorders, availablefunds, getpositions, cancelorder, placeorder, getpositions, getwallet, getsubaccount, accountinfo, randomid, resetconnections, market, trades, orderbook, connections}
